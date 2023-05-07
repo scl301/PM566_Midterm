@@ -1,0 +1,94 @@
+---
+title: "PM 566 Midterm"
+author: "Stephanie Lee"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Introduction
+
+In recent years, Medicare spending has become a significant concern for policymakers, as the program represents a substantial portion of the federal budget. According to the Centers for Medicare and Medicaid Services (CMS), in 2020, Medicare spending accounted for approximately 16% of the federal budget and totaled $796.2 billion.
+
+One area of particular concern is inpatient hospitalizations, which represent a significant portion of Medicare spending. In 2018, Medicare spent $203.1 billion on inpatient hospitalizations, accounting for 40% of all Medicare fee-for-service spending. Additionally, the average Medicare payment for an inpatient hospitalization was \$14,219 in 2018, with substantial variation across different geographic regions and hospital types.
+
+Given the high costs associated with Medicare inpatient hospitalizations, it is essential to understand the patterns and trends in healthcare utilization by Original Medicare Part A beneficiaries. The Medicare Inpatient Hospitals by Geography and Service dataset provides a rich source of information for exploring the variation in healthcare utilization and costs by geographic region and Medicare Severity Diagnosis Related Group (DRG).
+
+**Research Question:**
+
+1. How does Medicare inpatient hospitalization rates and payments vary by geographic region and Medicare Severity Diagnosis Related Group (DRG)?
+
+**Follow-up Questions:**
+
+2. What are the specific DRG codes with the highest rates of Medicare inpatient hospitalizations, and how do they vary across different geographic regions?
+
+3. What factors contribute to the variation in Medicare payments for inpatient hospitalizations across different geographic regions and DRG codes?
+
+
+# Methods
+
+### Data Source
+
+The Medicare Inpatient Hospitals by Geography and Service dataset is a critical source of information for understanding healthcare utilization and spending among Original Medicare Part A beneficiaries. The dataset is publicly accessible on the [CMS website](https://data.cms.gov/provider-summary-by-type-of-service/medicare-inpatient-hospitals/medicare-inpatient-hospitals-by-geography-and-service) and the version downloaded was the latest available from 2020. According to CMS, the dataset is derived from the Medicare Provider Analysis and Review (MedPAR) file, which contains information on hospital inpatient stays for Medicare beneficiaries. The MedPAR data is then aggregated by CMS into the Medicare Inpatient Hospital Discharge File (MIHDF), which is the source of the Medicare Inpatient Hospitals by Geography and Service dataset.
+
+The MIHDF contains information on hospital discharges for Original Medicare Part A beneficiaries by inpatient prospective payment system (IPPS) hospitals. The dataset is organized by geography and Medicare Severity Diagnosis Related Group (MS-DRG), a classification system used to group patients with similar diagnoses and treatments. The dataset includes information on the number of discharges, payments, and submitted charges for each MS-DRG in each geographic area.
+
+For further information, CMS provides documentation for the following:
+
+- [Data collection methodology](Medicare Inpatient Hospitals Methodology (1).pdf)
+- [Variable Descriptions](MUP_INP_RY22_20220722_DD_Geo.pdf)
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(dplyr)
+```
+
+```{r read data}
+data = read.csv(file = 'MUP_IHP_RY22_P02_V10_Dy20_Geo.csv')
+```
+
+### Data Wrangling
+
+After reading in data, checking the dimensions, headers, and footers, and carefully checking for variable names and types. There are a total of 9 variables and 26985 observations. The only missing values are within the geographic code varaible. This is because the data aggregated at the national level was given a value of 'NA' to distinguish from the other observations collected at the state level. The observations are categorized by state, with two additional regions: District of Columbia and aggregated data at the national level. Though there are 752 distinct diagnostic codes, there are only 735 diagnostic descriptions. For the diagnostic descriptions with more than one diagnostic code, they seem to be more vague like a certain type of procedure or containing the words "or" or "other". There are 17 total DRG descriptions assigned to more than one code. I assume these diagnosis descriptions are most likely further specified by the other diagnostic codes, which may be difficult for a non-medical expert to discern or irrelevant for data analysis use. Nevertheless, these descriptions only make up 3% of the observations in the dataset. Overall, the dataset was already very usable and only needed some variable data type changes, such as conversions of codes to categorical variables.
+ 
+```{r, results='hide'}
+dim(data)
+head(data)
+tail(data)
+
+#Variables
+str(data)
+```
+
+
+```{r, results='hide'}
+#Check missing values
+summary(is.na(data))
+```
+
+
+```{r, results='hide'}
+#Take a closer look at the key variables
+distinct(data, `DRG_Cd`)
+distinct(data, `Rndrng_Prvdr_Geo_Cd`)
+distinct(data, `DRG_Desc`)
+distinct(data, `Rndrng_Prvdr_Geo_Desc`)
+```
+
+
+```{r, results='hide'}
+# Find DRG descriptions assigned to more than one code.
+drgs <- distinct(data,`DRG_Cd`,`DRG_Desc`)
+drgs_dup <- drgs[duplicated(drgs$DRG_Desc),  ]
+drgs_dup
+```
+
+```{r, results='hide'}
+# Count the occurrences of DRG descriptions assigned to more than one code
+drgs_dup_vec <- drgs_dup$DRG_Desc
+table(data$DRG_Desc %in% drgs_dup_vec)
+```
+
+
+
+
