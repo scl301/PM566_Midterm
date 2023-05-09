@@ -2,7 +2,8 @@
 title: "PM 566 Midterm"
 author: "Stephanie Lee"
 date: "`r Sys.Date()`"
-output: html_document
+output: github_document
+always_allow_html: true
 ---
 
 # Introduction
@@ -11,7 +12,7 @@ In recent years, Medicare spending has become a significant concern for policyma
 
 One area of particular concern is inpatient hospitalizations, which represent a significant portion of Medicare spending. In 2018, Medicare spent $203.1 billion on inpatient hospitalizations, accounting for 40% of all Medicare fee-for-service spending. Additionally, the average Medicare payment for an inpatient hospitalization was \$14,219 in 2018, with substantial variation across different geographic regions and hospital types.
 
-Given the high costs associated with Medicare inpatient hospitalizations, it is essential to understand the patterns and trends in healthcare utilization by Original Medicare Part A beneficiaries. The Medicare Inpatient Hospitals by Geography and Service dataset provides a rich source of information for exploring the variation in healthcare utilization and costs by geographic region and Medicare Severity Diagnosis Related Group (DRG).
+Given the high costs associated with Medicare inpatient hospitalizations, it is essential to understand the patterns and trends in healthcare utilization by Original Medicare Part A beneficiaries. The Medicare Inpatient Hospitals by Geography and Service medicareset provides a rich source of information for exploring the variation in healthcare utilization and costs by geographic region and Medicare Severity Diagnosis Related Group (DRG).
 
 **Research Question:**
 
@@ -26,59 +27,67 @@ Given the high costs associated with Medicare inpatient hospitalizations, it is 
 
 # Methods
 
-### Data Source
+### Data Sources
 
 The Medicare Inpatient Hospitals by Geography and Service dataset is a critical source of information for understanding healthcare utilization and spending among Original Medicare Part A beneficiaries. The dataset is publicly accessible on the [CMS website](https://data.cms.gov/provider-summary-by-type-of-service/medicare-inpatient-hospitals/medicare-inpatient-hospitals-by-geography-and-service) and the version downloaded was the latest available from 2020. According to CMS, the dataset is derived from the Medicare Provider Analysis and Review (MedPAR) file, which contains information on hospital inpatient stays for Medicare beneficiaries. The MedPAR data is then aggregated by CMS into the Medicare Inpatient Hospital Discharge File (MIHDF), which is the source of the Medicare Inpatient Hospitals by Geography and Service dataset.
 
 The MIHDF contains information on hospital discharges for Original Medicare Part A beneficiaries by inpatient prospective payment system (IPPS) hospitals. The dataset is organized by geography and Medicare Severity Diagnosis Related Group (MS-DRG), a classification system used to group patients with similar diagnoses and treatments. The dataset includes information on the number of discharges, payments, and submitted charges for each MS-DRG in each geographic area.
 
+In addition to the DRG codes, the CMS Major Diagnostic Categories (MDCs) are also included, also found on the [CMS MS-DRG Definitions Manual](https://www.cms.gov/icd10m/version38-1-fullcode-cms/fullcode_cms/P0002.html). MDCs group DRGs based on the diagnosis that led to the hospital admission. The MDCs are broader categories than the DRGs and can provide additional insights into the types of medical conditions that are most commonly treated in hospitals. 
+
 For further information, CMS provides documentation for the following:
 
 - [Data collection methodology](Medicare Inpatient Hospitals Methodology (1).pdf)
 - [Variable Descriptions](MUP_INP_RY22_20220722_DD_Geo.pdf)
+- [Design and development of DRG](Design and development of the Diagnosis Related Group (DRG).pdf)
 
 
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(dplyr)
+library(ggplot2)
+library(knitr)
+library(data.table)
+library(kableExtra)
+library(scales)
+library(stringr)
 ```
 
-```{r read data}
-data = read.csv(file = 'MUP_IHP_RY22_P02_V10_Dy20_Geo.csv')
+```{r read data, include=FALSE}
+cms = read.csv(file = 'MUP_IHP_RY22_P02_V10_Dy20_Geo.csv')
+mdcs = read.csv(file = "DRG_MDC.csv")
 ```
 
 ### Data Wrangling
 
-After reading in data, checking the dimensions, headers, and footers, and carefully checking for variable names and types. There are a total of 9 variables and 26985 observations. The only missing values are within the geographic code varaible. This is because the data aggregated at the national level was given a value of 'NA' to distinguish from the other observations collected at the state level. The observations are categorized by state, with two additional regions: District of Columbia and aggregated data at the national level. Though there are 752 distinct diagnostic codes, there are only 735 diagnostic descriptions. For the diagnostic descriptions with more than one diagnostic code, they seem to be more vague like a certain type of procedure or containing the words "or" or "other". There are 17 total DRG descriptions assigned to more than one code. I assume these diagnosis descriptions are most likely further specified by the other diagnostic codes, which may be difficult for a non-medical expert to discern or irrelevant for data analysis use. Nevertheless, these descriptions only make up 3% of the observations in the dataset. Overall, the dataset was already very usable and only needed some variable data type changes, such as conversions of codes to categorical variables.
+After reading in data, checking the dimensions, headers, and footers, and carefully checking for variable names and types. There are a total of 9 variables and 26985 observations. The only missing values are within the geographic code varaible. This is because the data aggregated at the national level was given a value of 'NA' to distinguish from the other observations collected at the state level. The observations are categorized by state, with two additional regions: District of Columbia and aggregated data at the national level. Though there are 752 distinct diagnostic codes, there are only 735 diagnostic descriptions. For the diagnostic descriptions with more than one diagnostic code, they seem to be more vague like a certain type of procedure or containing the words "or" or "other". There are 17 total DRG descriptions assigned to more than one code. I assume these diagnosis descriptions are most likely further specified by the other diagnostic codes, which may be difficult for a non-medical expert to discern or irrelevant for data analysis use. Nevertheless, these descriptions only make up 3% of the observations in the dataset. Overall, the dataset was already fairly usable and only needed some variable data type changes, such as conversions of codes to categorical variables. Furthermore, MDCs were also joined to the dataset for broader diagnosis categories.
  
 ```{r, results='hide'}
-dim(data)
-head(data)
-tail(data)
+dim(cms)
+head(cms)
+tail(cms)
 
 #Variables
-str(data)
-```
+str(cms)
 
-
-```{r, results='hide'}
-#Check missing values
-summary(is.na(data))
+dim(mdcs)
+head(mdcs)
+tail(mdcs)
 ```
 
 
 ```{r, results='hide'}
 #Take a closer look at the key variables
-distinct(data, `DRG_Cd`)
-distinct(data, `Rndrng_Prvdr_Geo_Cd`)
-distinct(data, `DRG_Desc`)
-distinct(data, `Rndrng_Prvdr_Geo_Desc`)
+distinct(cms, `DRG_Cd`)
+distinct(cms, `Rndrng_Prvdr_Geo_Cd`)
+distinct(cms, `DRG_Desc`)
+distinct(cms, `Rndrng_Prvdr_Geo_Desc`)
 ```
 
 
 ```{r, results='hide'}
 # Find DRG descriptions assigned to more than one code.
-drgs <- distinct(data,`DRG_Cd`,`DRG_Desc`)
+drgs <- distinct(cms,`DRG_Cd`,`DRG_Desc`)
 drgs_dup <- drgs[duplicated(drgs$DRG_Desc),  ]
 drgs_dup
 ```
@@ -86,9 +95,188 @@ drgs_dup
 ```{r, results='hide'}
 # Count the occurrences of DRG descriptions assigned to more than one code
 drgs_dup_vec <- drgs_dup$DRG_Desc
-table(data$DRG_Desc %in% drgs_dup_vec)
+table(cms$DRG_Desc %in% drgs_dup_vec)
+```
+
+```{r join mdc codes, results='hide'}
+cms <- left_join(cms, select(mdcs, 'DRG_Cd','MDC', 'MDC_Desc'), by = 'DRG_Cd')
+
+#Check missing values
+summary(is.na(cms))
+```
+
+```{r}
+cms$Rndrng_Prvdr_Geo_Cd <- factor(cms$Rndrng_Prvdr_Geo_Cd)
+cms$DRG_Cd <- factor(cms$DRG_Cd)
+cms$MDC <- factor(cms$MDC)
+
+#Remove NAs except for geo codes for the National Level (this is intentionally set to NA)
+cms <- cms %>%
+  filter(!is.na(MDC) & !is.na(MDC_Desc))
 ```
 
 
 
+```{r}
+# Define region groups
+Northeast <- c("Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", "Vermont", "New York", "New Jersey", "Pennsylvania")
+South <- c("Delaware", "Florida", "Georgia", "Maryland", "North Carolina", "South Carolina", "Virginia", "District of Columbia", "West Virginia", "Alabama", "Kentucky", "Mississippi", "Tennessee", "Arkansas", "Louisiana", "Oklahoma", "Texas")
+Midwest <- c("Illinois", "Indiana", "Michigan", "Ohio", "Wisconsin", "Iowa", "Kansas", "Minnesota", "Missouri", "Nebraska", "North Dakota", "South Dakota")
+West <- c("Arizona", "Colorado", "Idaho", "Montana", "Nevada", "New Mexico", "Utah", "Wyoming", "Alaska", "California", "Hawaii", "Oregon", "Washington")
 
+# Create a new column for region and assign each state to a region
+cms$Region[cms$Rndrng_Prvdr_Geo_Desc %in% Northeast] <- "Northeast"
+cms$Region[cms$Rndrng_Prvdr_Geo_Desc %in% South] <- "South"
+cms$Region[cms$Rndrng_Prvdr_Geo_Desc %in% Midwest] <- "Midwest"
+cms$Region[cms$Rndrng_Prvdr_Geo_Desc %in% West] <- "West"
+cms$Region <- as.factor(cms$Region)
+```
+
+
+```{r, results='hide'}
+summary(cms)
+```
+
+# Preliminary Results
+
+### Summary Tables
+
+```{r}
+national_avg_discharges <- cms %>%
+  filter(Rndrng_Prvdr_Geo_Lvl == "National") %>%
+  group_by(MDC, MDC_Desc) %>%
+  summarize(total_discharges = sum(Tot_Dschrgs)) %>% 
+  arrange(desc(total_discharges))
+
+kable(national_avg_discharges, col.names = c("MDC Code", "MDC Description", "Total Annual Discharges"), caption = "Table 1. Total National Discharges By Diagnostic Category") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+Table 1 shows the number of occurrences of each diagnosis category recorded by CMS nationally. We can see that the MDC codes do not line up with frequency of occurrences. Furthermore, the leading type of diagnosis nationally are circulatory system related. This lines up the CDC's reported high prevalence of cardiac disease (1 in 3 deaths).
+
+```{r}
+regional_spending <- cms %>%
+  filter(!is.na(Rndrng_Prvdr_Geo_Cd)) %>%
+  group_by(Region) %>%
+  summarize(total_medicare_spending = sum(Avg_Mdcr_Pymt_Amt)) %>% 
+  arrange(desc(total_medicare_spending))
+
+overall_total <- sum(regional_spending$total_medicare_spending)
+regional_spending$percent_of_total <- percent(regional_spending$total_medicare_spending / overall_total)
+
+region_pop <- data.frame(
+  Region = c("Northeast", "Midwest", "South", "West"),
+  Population = c(58058022, 68329004, 125580448, 78347268)
+) %>%
+  mutate(percent_population = scales::percent(Population / sum(Population)))
+
+regional_spending <- left_join(regional_spending, select(region_pop, "percent_population", "Region"), by = "Region") 
+
+regional_spending$per_capita_spending <- dollar_format()(
+  regional_spending$total_medicare_spending / region_pop$Population
+)
+
+regional_spending$total_medicare_spending <- dollar_format()(regional_spending$total_medicare_spending)
+
+kable(regional_spending, col.names = c("Region", "Annual Medicare Spending", "Percent of Total Spending","Percent Population", "Spending Per Capita"), 
+      caption = "Table 2. Average Annual Medicare Spending By Region") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+
+From Table 2, we see that federal spending on Medicare is highest in the South. Generally, this percent of total spending is proportional to the percent of the population by region. However, we see that the South spends significantly more per capita on Medicare than in the West.
+
+### Plots
+
+```{r, fig.width=12, fig.height=6}
+# create a new column with the average Medicare payment per state
+avg_payment_by_state <- cms %>%
+  group_by(Rndrng_Prvdr_Geo_Desc) %>%
+  summarize(avg_payment = mean(Avg_Mdcr_Pymt_Amt, na.rm = TRUE)) %>%
+  ungroup()
+
+# sort the states by average payment in descending order
+avg_payment_by_state <- avg_payment_by_state[order(-avg_payment_by_state$avg_payment),]
+
+# highlight the top four states in a different color
+top_four <- head(avg_payment_by_state, 4)$Rndrng_Prvdr_Geo_Desc
+avg_payment_by_state$highlight <- ifelse(avg_payment_by_state$Rndrng_Prvdr_Geo_Desc %in% top_four, "Top 4 States", "Other States")
+
+# create the bar chart
+ggplot(avg_payment_by_state, aes(x = reorder(Rndrng_Prvdr_Geo_Desc, desc(avg_payment)), y = avg_payment, fill = highlight)) +
+  geom_bar(stat = "identity",  width = 0.7) +
+  scale_fill_manual(values = c("Top 4 States" = "tomato", "Other States" = "gray")) +
+  labs(title = "Average Medicare Payment by State",
+       x = "State",
+       y = "Average Medicare Payment (in Thousands)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+From this bar chart, we can surprisingly see that Maryland has the highest average Medicare payment amounts for Original Medicare Part A beneficiaries, followed by California and New York. Upon further research, Maryland enacted its "All-Payer" model in 2013 which increased Medicare funds for greater financial accessibility. Alaska is also quite surprising, but with further inspection, Alaska has a high proportion of elderly residents and due to its small population and remote location, healthcare delivery is more expensive.
+
+Additional sources are linked:
+- [CMS Maryland All-Payer Model](https://innovation.cms.gov/innovation-models/maryland-all-payer-model)
+- [Health Affairs on Maryland](https://www.healthaffairs.org/do/10.1377/forefront.20220205.211264/)
+- [Alaska Policy Forum](https://alaskapolicyforum.org/2021/02/alaskas-growth-in-medicare-spending-ranked/)
+
+
+```{r, fig.width=12, fig.height=8}
+#new column with abbreviated MDC Descriptions and Codes
+cms$MDC_Desc <- str_replace(cms$MDC_Desc, "Diseases and Disorders of the ", "")
+cms$MDC_Code_Desc <- paste(cms$MDC, cms$MDC_Desc, sep = " - ")
+
+ggplot(cms, aes(x = MDC, y = Avg_Mdcr_Pymt_Amt, fill = MDC_Code_Desc)) +
+  geom_boxplot() +
+  xlab("MDC Code") +
+  ylab("Average Medicare Payment Amount (in Thousands)") +
+  ggtitle("Average Medicare Payment Amount by MDC Code") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_fill_discrete(name = "MDC Description") +
+  scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, prefix = "$")) +
+  theme(legend.key.size = unit(0.5, "cm"),
+        legend.position = "right",
+        legend.box.just = "left",
+        legend.text = element_text(size = 10)) +
+  theme(plot.margin = unit(c(1, 2, 1, 1), "lines")) +
+  guides(fill = guide_legend(title = "MDC Description", ncol = 1)) +
+  coord_flip()
+```
+This boxplot shows that some of the diagnostic categories have a wide range of Medicare costs, particularly with burns and kidney and urinary tract disorders/diseases. Burns have a wide range of severity levels, with the highest degree requiring long hospital stays and care. Kidney and urinary tract infections are very common, so its sheer prevalence could be contributing to such high costs. Similarly, there is a wide range of severity when it comes to these issues, from a UTI to a full-blown kidney infection, which requires hospitalization.
+
+```{r}
+# create a new column with the total discharges per region and MDC
+discharges_by_region_mdc <- cms %>%
+  filter(!is.na(Region)) %>% 
+  group_by(Region, MDC_Desc) %>%
+  summarize(total_discharges = sum(Tot_Dschrgs)) %>%
+  ungroup()
+
+# get the top 5 MDCs with the highest total discharges for each region
+top_mdc <- discharges_by_region_mdc %>%
+  group_by(Region) %>%
+  top_n(5, total_discharges) %>%
+  arrange(desc(total_discharges))
+
+# Wrap text
+top_mdc$MDC_Desc <- str_wrap(top_mdc$MDC_Desc, width = 25)
+
+# plot the top 5 MDCs with the highest total discharges for each region
+ggplot(top_mdc, aes(x = reorder(MDC_Desc, desc(total_discharges)), y = total_discharges, fill = Region)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  xlab("MDC") +
+  ylab("Total Discharges") +
+  ggtitle("Top 5 MDCs with the Highest Total Discharges by Region") +
+  scale_fill_discrete(name = "Region") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = scales::comma_format())
+```
+
+In this barchart, we can see similar patterns of the South having the highest number of discharges for the top 5 MDC total discharges. This far surpasses the other regions, potentially indicating determinants of the population, potentially due to demographics or culture. We also see that diseases and disorders of the circulatory system, e.g. cardiovascular issues, are extremely prevalent, and this trend is only exacerbated in the South.
+
+
+# Conclusion
+From these preliminary findings, it is clear that Medicare spending and hospitalization rates are dependent on a wide variety of causes. The South has the highest hospitalization rates and the highest Medicare spending per capita. This is interesting because none of the states with the highest average total Medicare spending are in the South. Those states seem to have initiatives or unique qualities that lead to increased funding for Medicare. Ailments related to the circulatory system are by far the most common hospitalizations nationwide and the most costly. However, some illnesses such as those that are kidney and urinary tract related, also have very high spending due to the range of costs in this diagnostic category.
